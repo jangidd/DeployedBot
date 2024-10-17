@@ -345,7 +345,8 @@ def allocation(request):
         'Cities': unique_cities,
         'rejected': total_rejected_patients,
         'page_obj': page_obj,  # Pass page_obj for pagination controls
-           
+        'location': locations,
+        'form':form
 
     })  
 
@@ -4015,32 +4016,38 @@ def ECGSetTarget(request):
 ##################################################################################################################
 # Everything related to uploading the ecg files from the ecg coordinator dashboard. - Himanshu.
 def extract_patient_id(text):
-    if "Id :" in str(text):
-        id = str(text).split("Id :")[1].split(" ")[1].split("\n")[0].strip().lower()
-        # print("This is the first fetched id :", id)
-        if id == '':
-            fetched_id = str(text).split("Id :")[1].split("Name :")[0].strip().lower()
-            id = fetched_id.replace(" ", "")
+    try:
+        if "Id :" in str(text):
+            id = str(text).split("Id :")[1].split(" ")[1].split("\n")[0].strip().lower()
+            # print("This is the first fetched id :", id)
             if id == '':
-                id = str(text).split("Comments")[1].split("HR")[0].strip()
-                # print("comments", id)
+                fetched_id = str(text).split("Id :")[1].split("Name :")[0].strip().lower()
+                id = fetched_id.replace(" ", "")
                 if id == '':
-                    print("Id is not mentioned in the file. ")
-                    print("Id :" , id)
-    if "Id:" in str(text):
-        id = str(text).split("Id:")[1].split(" ")[1].split("\n")[0].strip().lower()
-        # print("This is the first fetched id :", id)
-        if id == '':
-            fetched_id = str(text).split("Id:")[1].split("Name :")[0].strip().lower()
-            id = fetched_id.replace(" ", "")
+                    id = str(text).split("Comments")[1].split("HR")[0].strip()
+                    # print("comments", id)
+                    if id == '':
+                        print("Id is not mentioned in the file. ")
+                        print("Id :" , id)
+        if "Id:" in str(text):
+            id = str(text).split("Id:")[1].split(" ")[1].split("\n")[0].strip().lower()
+            # print("This is the first fetched id :", id)
             if id == '':
-                id = str(text).split("Comments")[1].split("HR")[0].strip()
-                # print("comments", id)
+                fetched_id = str(text).split("Id:")[1].split("Name :")[0].strip().lower()
+                id = fetched_id.replace(" ", "")
                 if id == '':
-                    print("Id is not mentioned in the file. ")
-                    print("Id :" , id)
-        
-    return id
+                    id = str(text).split("Comments")[1].split("HR")[0].strip()
+                    # print("comments", id)
+                    # Adding the case to remove the extra space issue.
+                    if id == '':
+                        id = str(text).split("Id:")[1].split("Name:")[0].strip()
+                        if id == '':
+                            print("Id is not mentioned in the file. ")
+                            print("Id :" , id)
+            
+        return id
+    except IndexError:
+        return 'Missing'
     # try:
         # id = str(text).split("Id")[1].split("\n")[0]
         # print(id)
@@ -4076,7 +4083,12 @@ def extract_patient_gender(text):
 
 def extract_heart_rate(text):
     try:
-        return str(text).split("HR:")[1].split(" ")[1].split("/")[0].strip()
+        hr = str(text).split("HR:")[1].split("/")[0].strip()
+        print("This is the Heart Rate :", hr)
+        # if hr == '':
+        #     hr = str(text).split("HR:")[1].split("/")[0].strip()
+        #     print("This is updated Heart Rate :", hr)
+        return hr
     except IndexError:
         return '0'  # Default heart rate if not found
 
@@ -4107,6 +4119,25 @@ def deduplicate_text(text):
     lines = text.split('\n')
     unique_lines = list(dict.fromkeys(lines))
     return '\n'.join(unique_lines)
+
+# I am adding this function so that it can solve the issue of space after each character.
+def clean_page_data(first_page_text):
+    # Split the input data by lines
+    lines = first_page_text.split('\n')
+    
+    # Initialize a list to hold cleaned lines
+    cleaned_lines = []
+    
+    # Iterate through each line
+    for line in lines:
+        # Remove spaces after each character by replacing ' ' with '' and then joining characters
+        cleaned_line = ''.join(line.split())
+        
+        # Append the cleaned line to the list
+        cleaned_lines.append(cleaned_line)
+    
+    # Join the cleaned lines with newline characters for final output
+    return '\n'.join(cleaned_lines)
 
 
 
@@ -4153,9 +4184,28 @@ def upload_ecg(request):
                     # Passing the deduplicated data.
                     print("This is the extracted first page text", first_page_text)
 
+                    # Fixing the page text if it contains space after each character.
+                    # Adding a flag.
+                    extraSpace = False
+                    if "A c q u i r e d  o n :" in first_page_text:
+                        first_page_text = clean_page_data(first_page_text)
+                        # Printing the cleaned text.
+                        print("This is the cleaned text after removing the extra space issue :")
+                        print(first_page_text)
+                        # Now i am extracting the id separately in this condition.
+                        patient_id = str(first_page_text).split("Id:")[1].split("Name:")[0].strip()
+                        # Changing the flag to true.
+                        extraSpace = True
+
+                        
+
+
                     # Extract patient data using custom extraction functions
-                    patient_id = extract_patient_id(first_page_text)
-                    print("This is the patient id :", patient_id)
+                    if extraSpace == False:
+                        patient_id = extract_patient_id(first_page_text)
+                        print("This is the patient id :", patient_id)
+                        # Changing the flag back to False.
+                        extraSpace = True
 
                     # Rejecting the file if the id is not present there.
                     # if patient_id == '':

@@ -27,5 +27,5 @@ class PDFUploadForm(forms.Form):
     location = forms.ModelChoiceField(queryset=Location.objects.all(), label="Select Location")
 
 class ECGUploadForm(forms.Form):
-    ecg_file = MultiFileField(min_num=1, max_num=50, max_file_size=1024 * 1024 * 5)
+    ecg_file = MultiFileField(min_num=1, max_num=50, max_file_size=1024 * 1024 * 10)
     location = forms.ModelChoiceField(queryset=Location.objects.all(), label="Select Location", required=True)
