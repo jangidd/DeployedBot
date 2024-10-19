@@ -332,6 +332,13 @@ def allocation(request):
     # rejected_message = ''
     # rejected_details = []
 
+    # Handling the data passed in the request session.
+    # Get details from session
+    success_details = request.session.pop('success_details', [])
+    rejected_details = request.session.pop('rejected_details', [])
+    missing_id = request.session.pop('missing_id', [])
+    processing_error = request.session.pop('processing_error', [])
+
     return render(request, 'users/allocation.html', {
         'total_cases': total_cases,
         'total': total_current_uploaded,
@@ -346,7 +353,11 @@ def allocation(request):
         'rejected': total_rejected_patients,
         'page_obj': page_obj,  # Pass page_obj for pagination controls
         'location': locations,
-        'form':form
+        'form':form,
+        'success_details': success_details,
+        'rejected_details': rejected_details,
+        'missing_id': missing_id,
+        'processing_error': processing_error,
 
     })  
 
@@ -4106,7 +4117,13 @@ def extract_report_time(text):
 
 def extract_date(text):
     try:
-        raw_date = str(text).split("Acquired on:")[1][0:11].strip()
+        if "Acquired on:" in str(text):
+            raw_date = str(text).split("Acquired on:")[1][0:11].strip()
+        
+        # To resolve the extra space issue.
+        if "Acquiredon:" in str(text):
+            raw_date = str(text).split("Acquiredon:")[1][0:10].strip()
+
         if isinstance(raw_date, str):
             return datetime.strptime(raw_date, '%Y-%m-%d').date()
         else:
@@ -4143,10 +4160,12 @@ def clean_page_data(first_page_text):
 
 
 def upload_ecg(request):
-    success_message = ''
+    # success_message = ''
     success_details = []
-    rejected_message = ''
+    # rejected_message = ''
     rejected_details = []
+    missing_id = []
+    processing_error = []
 
     # This is not needed now .------
     if len(rejected_details) != 0:
@@ -4159,6 +4178,14 @@ def upload_ecg(request):
         # This is logs for debugging. - Himanshu.
         # print("Submitted data:", request.POST)  # Print POST data
         # print("Submitted files:", request.FILES)  # Print uploaded files
+
+        # Getting the maximum number of files from the form field
+        max_files = ECGUploadForm.base_fields['ecg_file'].max_num
+
+        # Checking if the number of files exceeds the maximum limit
+        if 'ecg_file' in request.FILES and len(request.FILES.getlist('ecg_file')) > max_files:
+            form.add_error('ecg_file', f'Maximum limit of selection is {max_files}.')
+
         if form.is_valid():
             print("Form is valid.")
             ecg_files = form.cleaned_data['ecg_file'] # This will be a list of files.
@@ -4171,7 +4198,7 @@ def upload_ecg(request):
                     # print(pdf_bytes)
                 except Exception as e:
                     print(f"Error reading ECG file: {str(e)}")
-                    rejected_details.append({'id': None, 'name': ecg_file.name})
+                    processing_error.append({'id': None, 'name': ecg_file.name})
                     continue
 
                 # pdf_bytes = ecg_file.read()
@@ -4215,7 +4242,7 @@ def upload_ecg(request):
                     # Check if the patient ID is valid
                     if not patient_id:
                         print(f"Skipping file {ecg_file.name} - Id is not present in the uploaded file.")
-                        rejected_details.append({'id': patient_id, 'name': ecg_file.name})
+                        missing_id.append({'id': patient_id, 'name': ecg_file.name})
                         break  # Break out of the inner loop to skip the current file
                     
                     if PatientDetails.objects.filter(PatientId=patient_id).exists():
@@ -4274,93 +4301,104 @@ def upload_ecg(request):
             total_cases.save()
 
             if rejected_details:
-                    rejected_message = f"{len(rejected_details)} files were rejected. Please check and try again."
+                    # rejected_message = f"{len(rejected_details)} files were rejected. Please check and try again."
                     rejected_details = [{'id': item['id'], 'name': item['name']} for item in rejected_details]
 
             if success_details:
-                success_message = f"{len(success_details)} Images uploaded successfully."
+                # success_message = f"{len(success_details)} Images uploaded successfully."
                 success_details = [{'id': item['id'], 'name': item['name']} for item in success_details]
+
+            if processing_error:
+                processing_error = [{'id': item['id'], 'name': item['name']} for item in processing_error]
+
+            if missing_id:
+                missing_id = [{'id': item['id'], 'name': item['name']} for item in missing_id]
+
+            # Passing all the data to the request sessions temporarily so that i can use it one time in my template.
+            # Storing details in the session (optional)
+            request.session['success_details'] = success_details
+            request.session['rejected_details'] = rejected_details
+            request.session['missing_id'] = missing_id
+            request.session['processing_error'] = processing_error
                 
             #########################################################################################
             # Passing all the data of allocation page.
             # Fetch and order patients
-            patients = PatientDetails.objects.all().order_by('-TestDate')
+            # patients = PatientDetails.objects.all().order_by('-TestDate')
             
-            # Total counts for statistics
-            total_current_uploaded = PatientDetails.objects.all().count()
-            total_uploaded_ecg = Total_Cases.objects.values_list('total_uploaded_ecg', flat=True).first()
-            total_reported_ecg = Total_Cases.objects.values_list('total_reported_ecg', flat=True).first()
-            total_nonreported_ecg = Total_Cases.objects.values_list('total_nonreported_ecg', flat=True).first()
+            # # Total counts for statistics
+            # total_current_uploaded = PatientDetails.objects.all().count()
+            # total_uploaded_ecg = Total_Cases.objects.values_list('total_uploaded_ecg', flat=True).first()
+            # total_reported_ecg = Total_Cases.objects.values_list('total_reported_ecg', flat=True).first()
+            # total_nonreported_ecg = Total_Cases.objects.values_list('total_nonreported_ecg', flat=True).first()
 
-            total_reported_patients = PatientDetails.objects.filter(cardiologist__isnull=False, isDone=True).count()
-            total_rejected_patients = PatientDetails.objects.filter(cardiologist__isnull=False, status=True).count()
-            total_nonreported_patients = PatientDetails.objects.filter(NonReportable=True).count()
-            total_unreported_and_unallocated_patients = PatientDetails.objects.filter(cardiologist=None, isDone=False).count()
-            total_unreported_and_allocated_patients = PatientDetails.objects.filter(cardiologist__isnull=False, isDone=False).count()
-            total_unreported_patients = total_unreported_and_unallocated_patients + total_unreported_and_allocated_patients
+            # total_reported_patients = PatientDetails.objects.filter(cardiologist__isnull=False, isDone=True).count()
+            # total_rejected_patients = PatientDetails.objects.filter(cardiologist__isnull=False, status=True).count()
+            # total_nonreported_patients = PatientDetails.objects.filter(NonReportable=True).count()
+            # total_unreported_and_unallocated_patients = PatientDetails.objects.filter(cardiologist=None, isDone=False).count()
+            # total_unreported_and_allocated_patients = PatientDetails.objects.filter(cardiologist__isnull=False, isDone=False).count()
+            # total_unreported_patients = total_unreported_and_unallocated_patients + total_unreported_and_allocated_patients
 
-            total_cases = {
-                'current_reported_cases': total_reported_patients,
-                'total_unreported': total_unreported_patients,
-                'unallocated': total_unreported_and_unallocated_patients,
-                'nonreported': total_nonreported_patients 
-            }
+            # total_cases = {
+            #     'current_reported_cases': total_reported_patients,
+            #     'total_unreported': total_unreported_patients,
+            #     'unallocated': total_unreported_and_unallocated_patients,
+            #     'nonreported': total_nonreported_patients 
+            # }
 
-            # Get cardiologists
-            cardiologist_group = Group.objects.get(name='cardiologist')
-            cardiologists_objects = cardiologist_group.user_set.all()
+            # # Get cardiologists
+            # cardiologist_group = Group.objects.get(name='cardiologist')
+            # cardiologists_objects = cardiologist_group.user_set.all()
 
-            # Set up pagination
-            paginator = Paginator(patients, 400)  # 200 patients per page
-            page_number = request.GET.get('page', 1)  # Get the page number from the request
-            try:
-                page_obj = paginator.get_page(page_number)
-            except PageNotAnInteger:
-                # If page is not an integer, deliver first page
-                page_obj = paginator.get_page(1)
-            except EmptyPage:
-                # If page is out of range, deliver last page of results
-                page_obj = paginator.get_page(paginator.num_pages)
+            # # Set up pagination
+            # paginator = Paginator(patients, 400)  # 200 patients per page
+            # page_number = request.GET.get('page', 1)  # Get the page number from the request
+            # try:
+            #     page_obj = paginator.get_page(page_number)
+            # except PageNotAnInteger:
+            #     # If page is not an integer, deliver first page
+            #     page_obj = paginator.get_page(1)
+            # except EmptyPage:
+            #     # If page is out of range, deliver last page of results
+            #     page_obj = paginator.get_page(paginator.num_pages)
 
-            # Get unique dates from the patients on the current page
-            unique_dates = set(patient.date.date_field for patient in page_obj.object_list)
-            sorted_unique_dates = sorted(unique_dates, reverse=False)
-            formatted_dates = [date.strftime('%Y-%m-%d') for date in sorted_unique_dates]
+            # # Get unique dates from the patients on the current page
+            # unique_dates = set(patient.date.date_field for patient in page_obj.object_list)
+            # sorted_unique_dates = sorted(unique_dates, reverse=False)
+            # formatted_dates = [date.strftime('%Y-%m-%d') for date in sorted_unique_dates]
 
-            # Get unique cities and locations
-            unique_cities = [f"{x.name}" for x in City.objects.all()]
-            unique_locations = [f"{y.name}" for y in Location.objects.all()]
+            # # Get unique cities and locations
+            # unique_cities = [f"{x.name}" for x in City.objects.all()]
+            # unique_locations = [f"{y.name}" for y in Location.objects.all()]
 
-            # Everything related to the uploading of the ecg file to the database from the modal.
-            form = ECGUploadForm()
-            locations = Location.objects.all()
-            # End of all the data of the alllocation  page.
+            # # Everything related to the uploading of the ecg file to the database from the modal.
+            # form = ECGUploadForm()
+            # locations = Location.objects.all()
+            # # End of all the data of the alllocation  page.
 
-            # Display a success message and render the same page
-            messages.success(request, 'PDF uploaded and processed successfully!')
-            # return render(request, 'users/allocation.html', {'form': ECGUploadForm()})
+            
+            # # return render(request, 'users/allocation.html', {'form': ECGUploadForm()})
 
-            return render(request, 'users/allocation.html', {
-                'total_cases': total_cases,
-                'total': total_current_uploaded,
-                'count': total_uploaded_ecg,
-                'total_reported': total_reported_ecg,
-                'total_nonreported': total_nonreported_ecg,
-                'patients': page_obj,  # Use page_obj for pagination
-                'cardiologists': cardiologists_objects,
-                'Date': formatted_dates,
-                'Location': unique_locations,
-                'Cities': unique_cities,
-                'rejected': total_rejected_patients,
-                'page_obj': page_obj,  # Pass page_obj for pagination controls
-                'form': form,
-                'location': locations,
-                'success_message': success_message,
-                'success_details': success_details,
-                'rejected_message': rejected_message,
-                'rejected_details': rejected_details,
-
-            })
+            # return render(request, 'users/allocation.html', {
+            #     'total_cases': total_cases,
+            #     'total': total_current_uploaded,
+            #     'count': total_uploaded_ecg,
+            #     'total_reported': total_reported_ecg,
+            #     'total_nonreported': total_nonreported_ecg,
+            #     'patients': page_obj,  # Use page_obj for pagination
+            #     'cardiologists': cardiologists_objects,
+            #     'Date': formatted_dates,
+            #     'Location': unique_locations,
+            #     'Cities': unique_cities,
+            #     'rejected': total_rejected_patients,
+            #     'page_obj': page_obj,  # Pass page_obj for pagination controls
+            #     'form': form,
+            #     'location': locations,
+            #     'success_details': success_details,
+            #     'rejected_details': rejected_details,
+            #     'missing_id':missing_id,
+            #     'processing_error':processing_error,
+            # })
 
             # return render(request, 'users/allocation.html', {
             #     'success_message': success_message,
@@ -4376,10 +4414,13 @@ def upload_ecg(request):
             # })
 
             # return redirect(f"{reverse('ecgcoordinator')}?{query_params}")
+            return redirect('ecgcoordinator')
+            
         else:
             # Form is not valid, render the page with form errors
             print("Form is not valid.")
             print("Form errors:", form.errors)
+            messages.error(request, f'Maximum limit of selection is {max_files}.')
             return redirect('ecgcoordinator')
     else:
         # For GET request, just render the empty form
