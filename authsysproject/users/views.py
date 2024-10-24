@@ -264,7 +264,11 @@ def allocation(request):
     rejected_message = ''
     rejected_details = []
     # Fetch and order patients
-    patients = PatientDetails.objects.all().order_by('-TestDate')
+    # patients = PatientDetails.objects.all().order_by('-TestDate')
+    # This will sort the data in such a way that the urgent = True data will be sorted first with -id sorting
+    # i.e. latest to oldest and then the urgent = False with -id sorting.
+    patients = PatientDetails.objects.all().order_by('-urgent', '-id')
+
     
     # Total counts for statistics
     total_current_uploaded = PatientDetails.objects.all().count()
@@ -361,6 +365,44 @@ def allocation(request):
 
     })  
 
+# This is the view that handles the marking of patients as urgent for ecg. - Himanshu.
+@csrf_exempt  # Be cautious with this , I have to study about it a bit.
+@require_POST
+def update_urgent_status_ecg(request, patient_id):
+    try:
+        data = json.loads(request.body)
+        urgent_status = data.get('urgent', False)
+
+        patient = PatientDetails.objects.get(PatientId=patient_id)
+        patient.urgent = urgent_status
+        patient.save()
+
+        return JsonResponse({'success': True, 'urgent': patient.urgent})
+    except PatientDetails.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Patient not found.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+
+# This is the view that handles the marking of patients as urgent for xray. - Himanshu.
+@csrf_exempt  # Be cautious with this , I have to study about it a bit.
+@require_POST
+def update_urgent_status_xray(request, patient_id):
+    try:
+        data = json.loads(request.body)
+        urgent_status = data.get('urgent', False)
+
+        patient = DICOMData.objects.get(patient_id=patient_id)
+        patient.urgent = urgent_status
+        patient.save()
+
+        return JsonResponse({'success': True, 'urgent': patient.urgent})
+    except PatientDetails.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Patient not found.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+
 @user_type_required('xraycoordinator')
 #def allocation1(request):
 #    patients = DICOMData.objects.all().order_by('-study_date')
@@ -400,7 +442,7 @@ def allocation(request):
 
 def allocation1(request):
     # Fetch and order patients
-    patients = DICOMData.objects.all().order_by('-study_date')
+    patients = DICOMData.objects.all().order_by('-urgent','-id')
     
     # Total counts for statistics
     total_current_uploaded = DICOMData.objects.all().count()
@@ -815,8 +857,10 @@ def ecgallocation(request):
     today = now().date()
     yesterday = today - timedelta(days=1)
 
-    allocated_to_current_user = PatientDetails.objects.filter(cardiologist=current_user_personal_info, isDone=False, status=False).order_by('TestDate')
-
+    # This was the previous filtering.
+    # allocated_to_current_user = PatientDetails.objects.filter(cardiologist=current_user_personal_info, isDone=False, status=False).order_by('TestDate')
+    # This is the new filtering :
+    allocated_to_current_user = PatientDetails.objects.filter(cardiologist=current_user_personal_info, isDone=False, status=False).order_by('-urgent', '-id')
     # Set up pagination
     paginator = Paginator(allocated_to_current_user, 200)  # 200 patients per page
     page_number = request.GET.get('page', 1)  # Get the page number from the request
@@ -849,7 +893,12 @@ def xrayallocation(request):
     total_reported = current_user_personal_info.total_reported
     today = now().date()
     yesterday = today - timedelta(days=1)
-    allocated_to_current_user = DICOMData.objects.filter(radiologist=current_user_personal_info, isDone=False).order_by('study_date')
+    
+    # This was the previous filtering.
+    # allocated_to_current_user = DICOMData.objects.filter(radiologist=current_user_personal_info, isDone=False).order_by('study_date')
+    
+    # This is the new filtering of the patients.
+    allocated_to_current_user = DICOMData.objects.filter(radiologist=current_user_personal_info, isDone=False).order_by('-urgent','-id')
 
     # Set up pagination
     paginator = Paginator(allocated_to_current_user, 200)  # 200 patients per page

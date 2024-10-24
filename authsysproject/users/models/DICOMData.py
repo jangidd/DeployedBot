@@ -13,6 +13,7 @@ class DICOMData(models.Model):
     study_description = models.CharField(max_length=100, blank=True)
     isDone = models.BooleanField(default=False)
     NonReportable = models.BooleanField(default=False)
+    urgent = models.BooleanField(default=False)
     notes = models.CharField(max_length=50000, default=True)
     location = models.ForeignKey(XLocation, on_delete=models.CASCADE, null=True, blank=True)
     radiologist = models.ManyToManyField(PersonalInfo, blank=True)

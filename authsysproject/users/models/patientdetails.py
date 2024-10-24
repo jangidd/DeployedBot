@@ -26,6 +26,7 @@ class PatientDetails(models.Model):
     isDone = models.BooleanField(default=False)
     status = models.BooleanField(default=False)
     NonReportable = models.BooleanField(default=False)
+    urgent = models.BooleanField(default=False)
 
     def __str__(self):
         return str(self.PatientName)

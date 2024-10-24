@@ -94,6 +94,9 @@ urlpatterns = [
     path('xrayPatientData', views.xraypatientDetails, name='xrayPatientData'),
     # End of ecg and xray routes. - Himanshu.
     path('upload-ecg/', views.upload_ecg, name='upload_ecg'),
+    # These url's handles the marking the checkbox as urgent - Himanshu.
+    path('update_urgent_status_ecg/<str:patient_id>/', views.update_urgent_status_ecg, name='update_urgent_status_ecg'),
+    path('update_urgent_status_xray/<str:patient_id>/', views.update_urgent_status_xray, name='update_urgent_status_xray'),
 
     # path('auto_sync/', views.Auto_Sync, name='get_dcm_files'),
 

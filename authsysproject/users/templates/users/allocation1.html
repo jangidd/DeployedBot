@@ -580,7 +580,8 @@
                         </div>
                     </div>
                 </th>
-              <!-- Add a column for the "Report" button -->
+                <!-- Adding this extra table heading for the urgent button. - Himanshu. -->
+                <th>Mark As Urgent</th>
               </tr>
         </thead>
         <tbody>
@@ -619,6 +620,11 @@
                 {% else %}
                     Unreported
                 {% endif %}
+            </td>
+            <!-- This is the checkbox for marking the patient as urgent - Himanshu. -->
+            <td>
+              <input type="checkbox" class="urgent-checkbox" data-patient-id="{{ patient.patient_id }}" 
+                  {% if patient.urgent %}checked{% endif %}>
             </td>
           </tr>
           {% endfor %}
@@ -982,6 +988,48 @@
                 scrollToTopButton.fadeOut();
             }
         }
+
+        // This handles the urgent checkbox functionality - Himanshu.
+        document.querySelectorAll('.urgent-checkbox').forEach(function(checkbox) {  
+            checkbox.addEventListener('change', function() {
+                const patientId = this.getAttribute('data-patient-id'); // Get the patient ID
+                const isUrgent = this.checked; // Get the current state of the checkbox
+        
+                // Log the current action
+                console.log(`Checkbox for Patient ID ${patientId} is now ${isUrgent ? 'checked' : 'unchecked'}.`);
+        
+                // Send AJAX request to update the urgent status in the database
+                fetch(`/update_urgent_status_xray/${patientId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}',  // Include CSRF token for Django
+                    },
+                    body: JSON.stringify({ urgent: isUrgent }) // Send the updated urgent status
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Success:', data);
+                    // You can add additional UI feedback here if needed
+                    if (data.success) {
+                        console.log(`Successfully updated urgent status for Patient ID ${patientId} to ${isUrgent}.`);
+                    } else {
+                        console.error(`Failed to update urgent status for Patient ID ${patientId}: ${data.error}`);
+                    }
+                })
+                .catch((error) => {
+                    console.error('Error during update:', error);
+                    // Revert checkbox state if there was an error
+                    this.checked = !isUrgent;
+                    console.log(`Reverted checkbox for Patient ID ${patientId} due to an error.`);
+                });
+            });
+        });
     </script>
 
 
