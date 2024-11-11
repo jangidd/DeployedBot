@@ -3203,6 +3203,7 @@ def add_patient_for_vaccination(request):
             typhoid_batch_no = request.POST.get('Typhoid_Batch_No')
             typhoid_manufacturing_date = request.POST.get('Typhoid_Manufacturing_Date')
             typhoid_expiry_date = request.POST.get('Typhoid_Expiry_Date')
+            date = request.POST.get('Date')
             # Create a new Patient object and save it to the database
             patient = vaccinationPatientDetails(
                 PatientId=patient_id,
@@ -3215,6 +3216,7 @@ def add_patient_for_vaccination(request):
                 Typhoid_Batch_No=typhoid_batch_no,
                 Typhoid_Manufacturing_Date=typhoid_manufacturing_date,
                 Typhoid_Expiry_Date=typhoid_expiry_date,
+                Date=date,
 
                 # TestDate=test_date,
                 # ReportDate=report_date,
